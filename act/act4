@@ -1,0 +1,406 @@
+Perfecto 💪🔥 entonces lo hacemos profesional:
+
+👉 **2 máquinas virtuales con Red Hat 10**
+👉 Red interna en VirtualBox
+👉 IP estática
+👉 Servicios + seguridad + NFS + P2P
+
+Te lo estructuro listo para que lo ejecutes y documentes.
+
+---
+
+# 🔵 PARTE 1 — DISEÑO DE RED (2 RED HAT 10)
+
+---
+
+## 📌 Configuración en VirtualBox
+
+En ambas máquinas:
+
+1. Apagar VM
+2. Configuración → Red
+3. Adaptador 1:
+
+   * Tipo: **Red Interna**
+   * Nombre: `red-lab`
+
+Esto crea una red privada entre las dos.
+
+---
+
+# 📊 ESQUEMA DE RED
+
+```
+                RED INTERNA 192.168.50.0/24
+
+        ┌──────────────────────────────┐
+        │                              │
+   RedHat-1                        RedHat-2
+  192.168.50.10                   192.168.50.20
+        │                              │
+        └──────── Switch Virtual ──────┘
+```
+
+---
+
+# 🧠 Modelo OSI aplicado a tu red
+
+### 1️⃣ Física
+
+Hardware virtual de VirtualBox.
+
+### 2️⃣ Enlace
+
+Tarjetas virtuales con MAC únicas.
+
+### 3️⃣ Red
+
+IP estática:
+
+* RH1 → 192.168.50.10
+* RH2 → 192.168.50.20
+
+### 4️⃣ Transporte
+
+TCP:
+
+* SSH → puerto 22
+* HTTP → puerto 80
+* HTTPS → puerto 443
+
+### 5️⃣ Sesión
+
+Mantiene activa la conexión SSH.
+
+### 6️⃣ Presentación
+
+Cifrado TLS en HTTPS.
+
+### 7️⃣ Aplicación
+
+Servicios:
+
+* SSH
+* Apache
+* NFS
+* BitTorrent
+
+---
+
+# 🔵 CONFIGURACIÓN DE IP ESTÁTICA
+
+---
+
+## En RedHat-1
+
+Ver nombre de conexión:
+
+```bash
+nmcli con show
+```
+
+Supongamos que se llama:
+
+`System eth0`
+
+Configurar IP:
+
+```bash
+sudo nmcli con mod "System eth0" ipv4.addresses 192.168.50.10/24
+sudo nmcli con mod "System eth0" ipv4.method manual
+sudo nmcli con up "System eth0"
+```
+
+---
+
+## En RedHat-2
+
+```bash
+sudo nmcli con mod "System eth0" ipv4.addresses 192.168.50.20/24
+sudo nmcli con mod "System eth0" ipv4.method manual
+sudo nmcli con up "System eth0"
+```
+
+---
+
+# 🔎 Verificar conectividad
+
+Desde RH1:
+
+```bash
+ping 192.168.50.20
+```
+
+Desde RH2:
+
+```bash
+ping 192.168.50.10
+```
+
+Traceroute:
+
+```bash
+traceroute 192.168.50.20
+```
+
+Debe mostrar 1 salto.
+
+---
+
+# 🔵 INSTALACIÓN DE SERVICIOS
+
+---
+
+# 🔐 SSH
+
+En ambas máquinas:
+
+```bash
+sudo dnf install openssh-server -y
+sudo systemctl enable sshd
+sudo systemctl start sshd
+```
+
+Probar conexión:
+
+Desde RH1:
+
+```bash
+ssh usuario@192.168.50.20
+```
+
+---
+
+# 🌐 APACHE (HTTP)
+
+En ambas:
+
+```bash
+sudo dnf install httpd -y
+sudo systemctl enable httpd
+sudo systemctl start httpd
+```
+
+Crear página en RH1:
+
+```bash
+echo "Servidor RedHat 1 funcionando" | sudo tee /var/www/html/index.html
+```
+
+Probar desde RH2:
+
+```bash
+curl http://192.168.50.10
+```
+
+---
+
+# 🔵 PARTE 2 — SEGURIDAD
+
+---
+
+# 🔥 FIREWALL (firewalld)
+
+En ambas máquinas:
+
+Permitir SSH:
+
+```bash
+sudo firewall-cmd --permanent --add-service=ssh
+```
+
+Permitir HTTP:
+
+```bash
+sudo firewall-cmd --permanent --add-service=http
+```
+
+Recargar:
+
+```bash
+sudo firewall-cmd --reload
+```
+
+Ver reglas:
+
+```bash
+sudo firewall-cmd --list-all
+```
+
+---
+
+# 🔑 SSH CON CLAVES
+
+En RH1:
+
+```bash
+ssh-keygen
+ssh-copy-id usuario@192.168.50.20
+```
+
+Deshabilitar contraseña:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+Cambiar:
+
+```
+PasswordAuthentication no
+```
+
+Reiniciar:
+
+```bash
+sudo systemctl restart sshd
+```
+
+---
+
+# 🔒 HTTPS (Certificado Autofirmado)
+
+Generar certificado en RH1:
+
+```bash
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+-keyout /etc/pki/tls/private/apache.key \
+-out /etc/pki/tls/certs/apache.crt
+```
+
+Editar:
+
+```bash
+sudo nano /etc/httpd/conf.d/ssl.conf
+```
+
+Configurar rutas del certificado.
+
+Reiniciar:
+
+```bash
+sudo systemctl restart httpd
+```
+
+Probar:
+
+```
+https://192.168.50.10
+```
+
+---
+
+# 🔎 Análisis con Nmap
+
+Instalar en RH2:
+
+```bash
+sudo dnf install nmap -y
+```
+
+Escanear RH1:
+
+```bash
+nmap 192.168.50.10
+```
+
+Ejemplo vulnerabilidades:
+
+1️⃣ Puertos innecesarios abiertos
+2️⃣ SSH permite login root
+3️⃣ Apache muestra versión
+
+Soluciones:
+
+* Cerrar puertos
+* `PermitRootLogin no`
+* `ServerTokens Prod`
+
+---
+
+# 🔵 PARTE 3 — SISTEMA DISTRIBUIDO (NFS)
+
+---
+
+## En RH1 (Servidor NFS)
+
+```bash
+sudo dnf install nfs-utils -y
+sudo mkdir /compartido
+sudo chmod 777 /compartido
+```
+
+Editar:
+
+```bash
+sudo nano /etc/exports
+```
+
+Agregar:
+
+```
+/compartido 192.168.50.20(rw,sync,no_root_squash)
+```
+
+Iniciar:
+
+```bash
+sudo systemctl enable nfs-server
+sudo systemctl start nfs-server
+```
+
+---
+
+## En RH2 (Cliente)
+
+```bash
+sudo dnf install nfs-utils -y
+sudo mount 192.168.50.10:/compartido /mnt
+```
+
+Probar:
+
+```bash
+touch /mnt/prueba.txt
+```
+
+---
+
+# 🔁 MODELO P2P
+
+Instalar:
+
+```bash
+sudo dnf install transmission-cli -y
+```
+
+Crear archivo:
+
+```bash
+echo "Archivo P2P RedHat" > archivo.txt
+```
+
+Crear torrent:
+
+```bash
+transmission-create archivo.txt
+```
+
+Descargar desde la otra máquina:
+
+```bash
+transmission-cli archivo.txt.torrent
+```
+
+---
+
+# 📌 ¿Qué hacemos ahora?
+
+Puedo:
+
+1️⃣ Prepararte el reporte formal listo para entregar
+2️⃣ Hacer el diagrama profesional tipo examen
+3️⃣ Ir ejecutándolo contigo paso a paso
+4️⃣ Simular preguntas que podrían hacerte en defensa oral
+
+Tú dime cuál y lo armamos bien nivel universitario 🔥
