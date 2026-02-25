@@ -1,0 +1,63 @@
+from flask import Flask, render_template, request, redirect
+import socket
+import ssl
+
+app = Flask(__name__)
+
+HOST = "127.0.0.1"
+PORT = 5000
+
+
+def enviar_comando(comando):
+    contexto = ssl.create_default_context()
+    contexto.check_hostname = False
+    contexto.verify_mode = ssl.CERT_NONE
+
+    cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    cliente.connect((HOST, PORT))
+    cliente = contexto.wrap_socket(cliente, server_hostname=HOST)
+
+    cliente.send(comando.encode())
+    respuesta = cliente.recv(4096).decode()
+    cliente.close()
+    return respuesta
+
+
+@app.route("/")
+def index():
+    procesos = enviar_comando("LIST")
+    estado = enviar_comando("STATUS")
+    return f"""
+    <h1>Panel de Procesos</h1>
+    <h2>Estado del Sistema</h2>
+    <pre>{estado}</pre>
+    <h2>Procesos Activos</h2>
+    <pre>{procesos}</pre>
+    <br>
+    <form action="/start" method="post">
+        <input name="comando" placeholder="Comando a iniciar">
+        <button type="submit">Iniciar</button>
+    </form>
+    <form action="/stop" method="post">
+        <input name="pid" placeholder="PID a detener">
+        <button type="submit">Detener</button>
+    </form>
+    """
+
+
+@app.route("/start", methods=["POST"])
+def start():
+    comando = request.form["comando"]
+    enviar_comando(f"START:{comando}")
+    return redirect("/")
+
+
+@app.route("/stop", methods=["POST"])
+def stop():
+    pid = request.form["pid"]
+    enviar_comando(f"STOP:{pid}")
+    return redirect("/")
+
+
+if __name__ == "__main__":
+    app.run(port=7000)
